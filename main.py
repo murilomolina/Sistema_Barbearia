@@ -2,10 +2,8 @@ import customtkinter as ctk
 from tela_inicial import TelaInicial
 import os
 
-
-
 janela_principal_width = 800
-janela_principal_heigth = 500
+janela_principal_heigth = 600
 botao_width = 100
 
 #configuração da janela inicial
