@@ -36,7 +36,7 @@ class TelaInicial:
         self.botao_confirmar_login = ctk.CTkButton(self.tabview.tab("Login"), text="Confirmar", command=self.tratar_login).pack(pady=10)
         
         #pergunta de segurança (esqueci minha senha)
-        self.texto_esqueci_senha = ctk.CTkButton(self.tabview.tab("Login"), text="Esqueci minha senha", font=("Arial", 12), command=self.pergunta_seguranca, width=botao_width/0.6).pack(pady=10)
+        self.texto_esqueci_senha = ctk.CTkButton(self.tabview.tab("Login"), text="Esqueci minha senha", font=("Arial", 12), command=self.pergunta_seguranca, width=botao_width/0.6, height= botao_width/4, corner_radius= botao_width/4).pack(pady=10)
 
 
         # elementos na Tab (cadastro)
@@ -75,7 +75,10 @@ class TelaInicial:
 
        # Adicionar elementos na Tab (Usuários)
         self.exibir_tabela_usuarios()
-
+        #botao excluir usuario na Tab (usuários)
+        self.botao_excluir_usuarios = ctk.CTkButton(self.tabview.tab("Usuários"), text="Excluir usuário", command=self.verif_senha_admin, fg_color="red", hover_color = "dark red")
+        self.botao_excluir_usuarios.pack(pady = 2)
+        
 ################################## LOGICA BANCO DE DADOS ##################################################################
         
     def get_connection(self):
@@ -121,7 +124,7 @@ class TelaInicial:
                     self.tabela_usuarios.delete(item)
 
                 # Preenche novamente com os dados atualizados
-                dados_usuarios = self.get_usuarios()
+                dados_usuarios = self.get_usuarios()[0]
                 for usuario in dados_usuarios:
                     if usuario[1] and usuario[2]:
                         # Convertendo a senha para "*" antes de inserir na tabela
@@ -144,12 +147,17 @@ class TelaInicial:
             # Executar a consulta SELECT
             cursor.execute('SELECT * FROM usuarios')
             dados_usuarios = cursor.fetchall()
+
+            cursor.execute('SELECT nomeusuario FROM usuarios')
+            resultados = cursor.fetchall()
+
+            nomes_usuarios = [resultado[0] for resultado in resultados]
         finally:
             # Commit e fechar a conexão
             conn.commit()
             conn.close()
 
-        return dados_usuarios
+        return dados_usuarios, nomes_usuarios
 
     def usuario_existe(self, novo_usuario):
         conn = self.get_connection()
@@ -169,7 +177,7 @@ class TelaInicial:
         nova_funcao = self.caixa_funcao_cadastro.get().lower()
         pergunta_seguranca = self.caixa_pergunta_seg_cadastro.get().lower()
         resposta_seguranca = self.caixa_resposta_seg_cadastro.get().lower()
-
+        admin_existente = self.verificar_admin_existe()
         # verificar se todos os campos foram preenchidos
         if not all([novo_usuario, nova_senha, nova_funcao, pergunta_seguranca, resposta_seguranca]):
             aviso_label = ctk.CTkLabel(self.tabview.tab("Cadastro"), text="Todos os campos devem ser preenchidos!", text_color="red", font=("Arial", 12, "bold"))
@@ -185,6 +193,16 @@ class TelaInicial:
             # Agendar a remoção do aviso
             self.tabview.tab("Cadastro").after(5000, lambda: aviso_label.pack_forget())
             return
+        
+        # verificar se já existe um adm
+        if novo_usuario == "administrador":
+            if admin_existente == True:
+                aviso_label = ctk.CTkLabel(self.tabview.tab("Cadastro"), text="Usuario Administrador já existe", text_color="red", font=("Arial", 12, "bold"))
+                aviso_label.pack(pady=10)
+                # Agendar a remoção do aviso
+                self.tabview.tab("Cadastro").after(5000, lambda: aviso_label.pack_forget())
+                return
+
         # Verificar se a senha atende aos requisitos
         if not (4 <= len(nova_senha) <= 8):
             aviso_label = ctk.CTkLabel(self.tabview.tab("Cadastro"), text="A senha deve ter entre 4 e 8 caracteres!", text_color="red", font=("Arial", 12, "bold"))
@@ -268,7 +286,7 @@ class TelaInicial:
         senha_mascarada = '*' * len(senha)
         return senha_mascarada
     
-    #### Pergunta e resposta de segurança
+    #### Pergunta e resposta de segurança ####
 
     def get_pergunta_resposta(self, nome_usuario):
         # Criar uma conexão com o banco de dados
@@ -299,6 +317,118 @@ class TelaInicial:
             conn.commit()
             conn.close()
         return senha_recuperada
+    
+    #### Exclusão por admin de usuarios ###
+
+    def get_senha_admin(self, funcao_admin):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try: 
+            cursor.execute('SELECT senhausuario FROM usuarios WHERE funcaousuario = ?', (funcao_admin,))
+            senha_admin = cursor.fetchone()
+            if senha_admin == None:
+                aviso = ctk.CTkLabel(self.tabview.tab("Usuários"), text="Nenhum admin cadastrado!!!", font=("Arial", 12), text_color="red").pack()
+                self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
+                return aviso
+        finally:
+            conn.commit()
+            conn.close()
+        return senha_admin[0]
+    
+
+    def verificar_admin_existe(self): 
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Consultar se o usuário já existe
+        cursor.execute('SELECT * FROM usuarios WHERE funcaousuario = "administrador"')
+        if cursor.fetchone() is not None:
+            # Fechar a conexão
+            conn.close()
+            return True
+        else: 
+            conn.close()
+            return False 
+
+
+    def verif_senha_admin(self):
+        senha_inserida = ctk.CTkInputDialog( title="Login de administrador", text=f"Adiministrador, insira a sua senha:\n").get_input()
+        # Verificar se o usuário logado é administrador
+        if self.get_senha_admin("administrador") != senha_inserida:
+            aviso = ctk.CTkLabel(self.tabview.tab("Usuários"), text="Apenas administradores podem excluir usuários.\nSenha errada!", font=("Arial", 12), text_color="red").pack()
+            self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
+            return
+        return self.abrir_janela_exclusao_usuarios()
+
+    def abrir_janela_exclusao_usuarios(self):
+        # Crie uma nova janela para a exclusão de usuários
+        janela_exclusao = ctk.CTkToplevel(self.janela)
+        janela_exclusao.title("Exclusão de Usuários")
+        janela_exclusao.geometry(f"{400}x{300}")
+        janela_exclusao.minsize(height=300, width=400)
+    
+        # Preencha a lista de usuários
+        dados_usuarios = self.get_usuarios()[1]
+
+        if not dados_usuarios:
+            # Se não houver usuários, exiba uma mensagem de aviso
+            ctk.CTkLabel(janela_exclusao, text="Não há usuários para excluir.", font=("Arial", 12), text_color="red").pack(pady=10)
+            return
+
+        # Certifique-se de que dados_usuarios seja uma lista de strings
+        dados_usuarios = [str(usuario) for usuario in dados_usuarios]
+
+        # Adicione um Combobox para exibir a lista de usuários
+        usuario_para_excluir_combobox = ctk.CTkComboBox(janela_exclusao, values=dados_usuarios)
+        usuario_para_excluir_combobox.pack(pady=10)
+
+        # Adicione um botão para executar a exclusão
+        aviso = ctk.CTkButton(
+            janela_exclusao,
+            text="Excluir Usuário",
+            command=lambda: self.excluir_usuario(usuario_para_excluir_combobox.get()), fg_color='red', hover_color="dark red"
+        ).pack(pady=10)
+        self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
+
+    def excluir_usuario(self, usuario_para_excluir):
+        # Conectar ao banco de dados
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Verificar se o usuário a ser excluído existe
+            cursor.execute('SELECT * FROM usuarios WHERE nomeusuario=?', (usuario_para_excluir,))
+            usuario = cursor.fetchone()
+
+            if usuario:
+                # Excluir o usuário
+                cursor.execute('DELETE FROM usuarios WHERE nomeusuario=?', (usuario_para_excluir,))
+                conn.commit()
+
+                # Exclusão bem-sucedida
+                aviso = ctk.CTkLabel(
+                    self.tabview.tab("Usuários"),
+                    text=f"Usuário {usuario_para_excluir} excluído com sucesso.",
+                    font=("Arial", 12),
+                    text_color="green"
+                ).pack()
+                self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
+
+            else:
+                # Usuário não encontrado
+                aviso = ctk.CTkLabel(
+                    self.tabview.tab("Usuários"),
+                    text=f"Usuário {usuario_para_excluir} não encontrado.",
+                    font=("Arial", 12),
+                    text_color="red"
+                ).pack()
+                self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
+
+        finally:
+            # Fechar a conexão com o banco de dados
+            conn.close()
+            self.atualizar_tabela_usuarios()
+
 
 ##########################################################################################################################################
 
