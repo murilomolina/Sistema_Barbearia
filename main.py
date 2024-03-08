@@ -19,7 +19,8 @@ janela._set_appearance_mode("dark")
 janela.geometry(f"{janela_principal_width}x{janela_principal_heigth}")
 janela.minsize(height=janela_principal_heigth, width=janela_principal_width)
 
-TelaInicial(janela, janela_principal_width, janela_principal_heigth, botao_width)
+tela_inicial = TelaInicial(janela, janela_principal_width, janela_principal_heigth, botao_width)
+tela_inicial.exibir_tela_inicial()
 
 ocultar_db()
 

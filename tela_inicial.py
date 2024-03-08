@@ -2,6 +2,7 @@ import sqlite3
 import customtkinter as ctk
 from tkinter import ttk
 
+from tela_logada import TelaLogada
 
 
 class TelaInicial:
@@ -13,6 +14,7 @@ class TelaInicial:
 
         self.frame_titulo()
 
+    def exibir_tela_inicial(self):
         # CTkTabview
         self.tabview = ctk.CTkTabview(self.janela,width=self.width, corner_radius = 20)
         self.tabview.pack()
@@ -36,7 +38,7 @@ class TelaInicial:
         self.botao_confirmar_login = ctk.CTkButton(self.tabview.tab("Login"), text="Confirmar", command=self.tratar_login).pack(pady=10)
         
         #pergunta de segurança (esqueci minha senha)
-        self.texto_esqueci_senha = ctk.CTkButton(self.tabview.tab("Login"), text="Esqueci minha senha", font=("Arial", 12), command=self.pergunta_seguranca, width=botao_width/0.6, height= botao_width/4, corner_radius= botao_width/4).pack(pady=10)
+        self.texto_esqueci_senha = ctk.CTkButton(self.tabview.tab("Login"), text="Esqueci minha senha", font=("Arial", 12), command=self.pergunta_seguranca, width=self.botao_width/0.6, height= self.botao_width/4, corner_radius= self.botao_width/4).pack(pady=10)
 
 
         # elementos na Tab (cadastro)
@@ -73,7 +75,7 @@ class TelaInicial:
         # elementos na Tab (cadastro)
         self.text_usuarios = ctk.CTkLabel(self.tabview.tab("Usuários"), text="\nTodos os usuários já cadastrados no sistema:", font=("Arial", 12, "bold")).pack(pady=10)
 
-       # Adicionar elementos na Tab (Usuários)
+    # Adicionar elementos na Tab (Usuários)
         self.exibir_tabela_usuarios()
         #botao excluir usuario na Tab (usuários)
         self.botao_excluir_usuarios = ctk.CTkButton(self.tabview.tab("Usuários"), text="Excluir usuário", command=self.verif_senha_admin, fg_color="red", hover_color = "dark red")
@@ -83,6 +85,24 @@ class TelaInicial:
         
     def get_connection(self):
         return sqlite3.connect('dbbarbearia.db')
+
+    def get_id_usuario(self, nome_usuario):
+        try:
+           # Criar uma conexão com o banco de dados
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT id FROM usuarios WHERE nomeusuario=?', (nome_usuario,))
+            resultado = cursor.fetchone()
+            if resultado:
+                return resultado[0]
+            else:
+                return None
+        except sqlite3.Error as e:
+            print(f"Erro ao obter o ID do usuário: {e}")
+            return None
+        finally:
+            conn.commit()
+            conn.close()
 
     def exibir_tabela_usuarios(self):
         # Criar e exibir a tabela de usuários usando ttk.Treeview
@@ -251,12 +271,17 @@ class TelaInicial:
             self.tabview.tab("Cadastro").after(5000, lambda: aviso_label.pack_forget())
 
     def tratar_login(self):
-        usuario, senha = self.caixa_usuario.get(), self.caixa_senha.get()
+        nome_usuario, senha = self.caixa_usuario.get(), self.caixa_senha.get()
+        usuario_id = self.get_id_usuario(nome_usuario=nome_usuario)
+        
 
-        if self.verificar_credenciais(usuario, senha):
+        if self.verificar_credenciais(nome_usuario, senha):
             aviso_label = ctk.CTkLabel(self.tabview.tab("Login"), text="Credenciais válidas!", text_color="green", font=("Arial", 12, "bold"))
             aviso_label.pack(pady=10)
             self.tabview.tab("Login").after(5000, lambda: aviso_label.pack_forget())
+            # Cria e exibe a Tela Logada
+            tela_logada = TelaLogada(self.janela, self.width, self.heigth, self.botao_width, usuario_id=usuario_id, nome_usuario=nome_usuario)
+            tela_logada.exibir_tela_logada()
         else:
             # Credenciais inválidas, exibir mensagem de aviso
             aviso_label = ctk.CTkLabel(self.tabview.tab("Login"), text="Credenciais inválidas!", text_color="red", font=("Arial", 12, "bold"))
@@ -355,7 +380,8 @@ class TelaInicial:
         senha_inserida = ctk.CTkInputDialog( title="Login de administrador", text=f"Adiministrador, insira a sua senha:\n").get_input()
         # Verificar se o usuário logado é administrador
         if self.get_senha_admin("administrador") != senha_inserida:
-            aviso = ctk.CTkLabel(self.tabview.tab("Usuários"), text="Apenas administradores podem excluir usuários.\nSenha errada!", font=("Arial", 12), text_color="red").pack()
+            aviso = ctk.CTkLabel(self.tabview.tab("Usuários"), text="Apenas administradores podem excluir usuários.\nSenha errada!", font=("Arial", 12), text_color="red")
+            aviso.pack(pady=2)
             self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
             return
         return self.abrir_janela_exclusao_usuarios()
@@ -383,12 +409,11 @@ class TelaInicial:
         usuario_para_excluir_combobox.pack(pady=10)
 
         # Adicione um botão para executar a exclusão
-        aviso = ctk.CTkButton(
+        ctk.CTkButton(
             janela_exclusao,
             text="Excluir Usuário",
             command=lambda: self.excluir_usuario(usuario_para_excluir_combobox.get()), fg_color='red', hover_color="dark red"
         ).pack(pady=10)
-        self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
 
     def excluir_usuario(self, usuario_para_excluir):
         # Conectar ao banco de dados
@@ -411,7 +436,9 @@ class TelaInicial:
                     text=f"Usuário {usuario_para_excluir} excluído com sucesso.",
                     font=("Arial", 12),
                     text_color="green"
-                ).pack()
+                )
+                aviso.pack(pady=2)
+
                 self.tabview.tab("Usuários").after(5000, lambda: aviso.pack_forget())
 
             else:
